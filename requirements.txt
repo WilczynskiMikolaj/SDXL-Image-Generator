@@ -1,0 +1,4 @@
+accelerate
+gradio
+peft
+compel

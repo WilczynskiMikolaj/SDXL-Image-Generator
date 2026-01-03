@@ -8,6 +8,9 @@ The main purpose of this project is to experiment with trained SDXL checkpoints 
 
 ## 🚀 How to Use
 
+## Install PyTorch
+https://pytorch.org/get-started/locally/
+
 ### 1️⃣ Write Your Prompt
 Edit **`prompt.json`** and fill in:
 - `prompt`
