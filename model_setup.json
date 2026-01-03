@@ -1,0 +1,7 @@
+{
+  "image_size": [1024, 1024],
+  "inference_steps": 40,
+  "guidance_scale": 4.1,
+  "images_per_prompt": 5,
+  "adapter_weights": []
+}

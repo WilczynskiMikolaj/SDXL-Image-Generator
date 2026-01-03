@@ -30,8 +30,9 @@ Use one or more LoRAs:
 -l flag
 
 ## 🧭 Plans
-- Add more terminal options
-- Improve error handling
+- Add loading the model configuration with json file ✅
+- Add more terminal options ✅
+- terminal options overwrite json defaults ✅
 - Add a GUI
 
 ---
