@@ -156,8 +156,3 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
-
-# SDXL-CLI-GENERATOR STUFF
-model_checkpoints/*
-loras/*
-images/*
