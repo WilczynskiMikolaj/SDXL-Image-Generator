@@ -1,9 +1,9 @@
 from diffusers import StableDiffusionXLPipeline
 import torch
 from compel import CompelForSDXL
-from model_configs import model_files, lora_files
+from src.sdxl_model_pipeline.model_configs import model_files, lora_files
 import json
-from config_loader import load_from_json
+from utils.config_loader import load_from_json
 
 class ModelLoader:
     def __init__(self, model_name=None, loras=[], image_size=(1024, 1024), inference_steps=40, guidance_scale=4.123817, images_per_prompt=5, adapter_weights=None):

@@ -1,6 +1,6 @@
 import argparse
-from model_configs import model_descriptions
-from model_loader import ModelLoader
+from src.sdxl_model_pipeline.model_configs import model_descriptions
+from src.sdxl_model_pipeline import ModelLoader
 
 def run_terminal():
     parser = argparse.ArgumentParser(
