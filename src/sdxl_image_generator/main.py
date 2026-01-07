@@ -1,6 +1,11 @@
 import argparse
-from src.sdxl_model_pipeline.model_configs import model_descriptions
-from src.sdxl_model_pipeline import ModelLoader
+from sdxl_image_generator.sdxl_model_pipeline.model_configs import model_descriptions
+from sdxl_image_generator.sdxl_model_pipeline.model_loader import ModelLoader
+from sdxl_image_generator.ui.gradio_app import create_ui
+
+def main():
+    demo = create_ui()
+    demo.launch()
 
 def run_terminal():
     parser = argparse.ArgumentParser(
@@ -77,4 +82,4 @@ def run_terminal():
     model.prompt_model()
 
 if __name__ == "__main__":
-    run_terminal()  
+    main()

@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sdxl-image-generator"
+version = "0.3.0"
+description = "SDXL CLI + Gradio UI"
+requires-python = ">=3.10"
+
+[project.scripts]
+run_sdxl = "sdxl_image_generator.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
