@@ -3,11 +3,10 @@
 A work-in-progress **SDXL image generation tool** with both a **CLI** and a **Gradio-based GUI**.
 
 This project started as an experiment to build **custom SDXL pipelines** for running different checkpoints and configurations.  
-Initially, the focus was purely on terminal usage, but during development I discovered **Gradio**, which made it much easier (and more fun) to rapidly prototype a GUI.
+Initially, I wanted only terminal usage, but during development I discovered **Gradio**, which made me want to build a GUI.
 
 ⚠️ **Project status:**  
-The CLI is currently **under reconstruction**, and the project is actively evolving.  
-Expect breaking changes.
+The GUI is currently **under construction**, so CLI stoped working
 
 ---
 
@@ -48,13 +47,5 @@ All remaining dependencies are listed in `requirements.txt`.
   - [ ] Validate and apply runtime changes
 
 ## Phase 5: Polish & Stability
-- [ ] Error handling and validation in UI
-- [ ] Persist UI state back to JSON
-- [ ] Improve UX (tooltips, presets, defaults)
-- [ ] Logging and debug panel
 
 ---
-
-### ✅ Legend
-- `[x]` Completed  
-- `[ ]` Planned / In Progress
