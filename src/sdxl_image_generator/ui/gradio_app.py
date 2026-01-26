@@ -1,6 +1,5 @@
 import gradio as gr
 from sdxl_image_generator.utils.utils import get_all_directory_elements
-from sdxl_image_generator.sdxl_model_pipeline.model_loader import ModelLoader
 
 
 def create_ui():
@@ -9,7 +8,6 @@ def create_ui():
     
     with gr.Blocks(fill_width=True, fill_height=True) as demo:
         lora_element_state = gr.State([{"name":lora, "enabled": False} for lora in lora_names])
-        model_loader = ModelLoader()
 
         gr.Markdown("# SDXL-CLI-GENERATOR GUI")
         with gr.Row(equal_height=True):

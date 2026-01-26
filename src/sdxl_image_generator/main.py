@@ -1,6 +1,6 @@
 import argparse
 from sdxl_image_generator.sdxl_model_pipeline.model_configs import model_descriptions
-from sdxl_image_generator.sdxl_model_pipeline.model_loader import ModelLoader
+from sdxl_image_generator.sdxl_model_pipeline.model_loader_cli import ModelLoaderBase
 from sdxl_image_generator.ui.gradio_app import create_ui
 
 def main():
@@ -78,8 +78,8 @@ def run_terminal():
 
     args = parser.parse_args()
 
-    model = ModelLoader.from_cli(args)
-    model.prompt_model()
+#    model = ModelLoader.from_cli(args)
+#    model.prompt_model()
 
 if __name__ == "__main__":
     main()

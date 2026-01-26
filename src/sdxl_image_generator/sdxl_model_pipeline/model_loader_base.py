@@ -2,23 +2,39 @@ from diffusers import StableDiffusionXLPipeline
 import torch
 from compel import CompelForSDXL
 from abc import ABC, abstractmethod
+from diffusers import (
+DPMSolverMultistepScheduler,
+EulerAncestralDiscreteScheduler,
+EulerDiscreteScheduler,
+DDIMScheduler,
+HeunDiscreteScheduler,
+)
 
 class ModelLoaderBase(ABC):
-    def __init__(self, image_size=(1024, 1024), inference_steps=40, guidance_scale=4.123817, images_per_prompt=5, adapter_weights=None, available_models=None, available_loras=None):
+    def __init__(self, image_size=(1024, 1024), inference_steps=40, guidance_scale=4.123817, images_per_prompt=5, adapter_weights=None, available_models=None, available_loras=None, seed=None, guidance_rescale=0.0, schedulers=None):
         self.loaded_model_name = None
         self.active_loras = None
-        self.image_size = image_size
+        self.active_scheduler = None
+        self.image_width = image_size[0]
+        self.image_height = image_size[1]
         self.inference_steps = inference_steps
         self.guidance_scale = guidance_scale
         self.images_per_prompt = images_per_prompt
-        self.adapter_weights = adapter_weights or []
+        self.seed = seed
+        self.guidance_rescale = guidance_rescale
 
         self.pipe: StableDiffusionXLPipeline = None
         self.compel: CompelForSDXL = None
 
+        self.scheduler_map = schedulers or {
+            "dpmpp_2m": DPMSolverMultistepScheduler,
+            "euler_a": EulerAncestralDiscreteScheduler,
+            "euler": EulerDiscreteScheduler,
+            "ddim": DDIMScheduler,
+            "heun": HeunDiscreteScheduler}
         self.available_models = available_models or {}
         self.available_loras = available_loras or {}
-
+        self.adapter_weights = adapter_weights or []
 
     def load_loras(self, loras, adapter_weights=None):
         if not self.pipe:
@@ -29,6 +45,9 @@ class ModelLoaderBase(ABC):
             self.active_loras = []
             self.adapter_weights = None
             return
+        
+        if self.active_loras:
+            self.pipe.disable_lora()
 
         if not isinstance(loras, list):
             raise TypeError("loras must be a list")
@@ -65,7 +84,7 @@ class ModelLoaderBase(ABC):
         if isinstance(model_source, str) and model_source.endswith((".safetensors", ".ckpt")):
             pipe = StableDiffusionXLPipeline.from_single_file(model_source, torch_dtype=torch.float16, use_safetensors=True)
         else:
-            pipe = StableDiffusionXLPipeline.from_pretrained(model_source, torch_dtype=torch.float16, use_safetensors=True)
+            pipe = StableDiffusionXLPipeline.from_pretrained(model_source,torch_dtype=torch.float16, use_safetensors=True)
 
         pipe = pipe.to("cuda")
 
@@ -78,6 +97,21 @@ class ModelLoaderBase(ABC):
             pass
 
         self.pipe = pipe
+
+        if self.active_scheduler:
+            self.change_scheduler(self.active_scheduler)
+
+    def change_scheduler(self, name: str):
+        if not self.pipe:
+            raise RuntimeError("Pipeline not initialized")
+
+        name = name.lower()
+        
+        if name not in self.scheduler_map:
+            raise ValueError(f"Unknown scheduler '{name}'. " f"Available: {list(self.scheduler_map.keys())}")
+        SchedulerClass = self.scheduler_map[name]
+        self.pipe.scheduler = SchedulerClass.from_config(self.pipe.scheduler.config)
+        self.active_scheduler = name
 
     def load_model(self, model_name):
         if self.pipe and model_name == self.loaded_model_name:
@@ -103,5 +137,5 @@ class ModelLoaderBase(ABC):
             device=self.pipe.device)
         
     @abstractmethod
-    def prompt_model(self):
+    def generate_images(self):
         pass
