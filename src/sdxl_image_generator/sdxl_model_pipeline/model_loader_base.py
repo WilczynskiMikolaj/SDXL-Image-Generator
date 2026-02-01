@@ -11,17 +11,10 @@ HeunDiscreteScheduler,
 )
 
 class ModelLoaderBase(ABC):
-    def __init__(self, image_size=(1024, 1024), inference_steps=40, guidance_scale=4.123817, images_per_prompt=5, adapter_weights=None, available_models=None, available_loras=None, seed=None, guidance_rescale=0.0, schedulers=None):
+    def __init__(self, adapter_weights=None, available_models=None, available_loras=None, schedulers=None):
         self.loaded_model_name = None
         self.active_loras = None
         self.active_scheduler = None
-        self.image_width = image_size[0]
-        self.image_height = image_size[1]
-        self.inference_steps = inference_steps
-        self.guidance_scale = guidance_scale
-        self.images_per_prompt = images_per_prompt
-        self.seed = seed
-        self.guidance_rescale = guidance_rescale
 
         self.pipe: StableDiffusionXLPipeline = None
         self.compel: CompelForSDXL = None

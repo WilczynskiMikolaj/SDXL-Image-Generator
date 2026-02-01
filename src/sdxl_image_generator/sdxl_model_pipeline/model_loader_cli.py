@@ -4,8 +4,101 @@ from compel import CompelForSDXL
 from sdxl_image_generator.sdxl_model_pipeline.model_configs import model_files, lora_files
 import json
 from sdxl_image_generator.utils.config_loader import load_from_json
+from sdxl_image_generator.sdxl_model_pipeline.model_loader_base import ModelLoaderBase
 
-class ModelLoader:
+
+class ModelLoaderCLI(ModelLoaderBase):
+    def __init__(self, image_size=(1024, 1024), guidance_scale=4.123817, inference_steps=40, images_per_prompt=5, seed=None, guidance_rescale=0.0):
+        super().__init__()
+        self.image_width = image_size[0]
+        self.image_height = image_size[1]
+        self.guidance_scale = guidance_scale
+        self.inference_steps = inference_steps
+        self.images_per_prompt = images_per_prompt
+        self.seed = seed
+        self.guidance_rescale = guidance_rescale
+
+    def generate_images(self, prompt, negative_prompt):
+        if not self.pipe or not self.compel:
+            raise RuntimeError("Model or Compel not initialized")
+
+        if self.seed is None or self.seed < 0:
+            seed = torch.randint(0, 2**32 - 1, (1,)).item()
+            self.seed = seed
+        else:
+            seed = self.seed
+
+        conditioning = self.compel(prompt, negative_prompt=negative_prompt)
+
+        generator = torch.Generator("cuda").manual_seed(seed)
+
+        with torch.inference_mode():
+            generated_images = self.pipe(prompt_embeds=conditioning.embeds, 
+                pooled_prompt_embeds=conditioning.pooled_embeds,
+                negative_prompt_embeds=conditioning.negative_embeds,
+                negative_pooled_prompt_embeds=conditioning.negative_pooled_embeds,
+                num_inference_steps=self.inference_steps, guidance_scale=self.guidance_scale, 
+                width=self.image_width, height=self.image_height, num_images_per_prompt=self.images_per_prompt, 
+                generator=generator, guidance_rescale=self.guidance_rescale)
+            
+        return generated_images
+
+    def apply_config(self, config: dict):
+        if not isinstance(config, dict):
+            raise TypeError("config must be a dict")
+
+        if "width" in config:
+            self.image_width = int(config["width"])
+
+        if "height" in config:
+            self.image_height = int(config["height"])
+
+        if "inference_steps" in config:
+            self.inference_steps = int(config["inference_steps"])
+
+        if "guidance_scale" in config:
+            self.guidance_scale = float(config["guidance_scale"])
+
+        if "images_per_prompt" in config:
+            self.images_per_prompt = int(config["images_per_prompt"])
+
+        if "seed" in config:
+            self.seed = int(config["seed"])
+
+        if "guidance_rescale" in config:
+            self.guidance_rescale = float(config["guidance_rescale"])
+
+        if config.get("scheduler"):
+            self.change_scheduler(config["scheduler"])
+
+        if "loras" in config:
+            self.load_loras(
+                config["loras"],
+                config.get("adapter_weights")
+            )
+
+    def to_dict(self):
+        excluded = {"pipe", "compel", "available_models", "available_loras", "images_per_prompt"}
+        result = {}
+
+        for key, value in self.__dict__.items():
+            if key in excluded:
+                continue
+            try:
+                json.dumps(value)
+                result[key] = value
+            except TypeError:
+                result[key] = str(value)
+
+        return result
+
+
+
+
+
+
+
+class ModelLoaderTEMP:
     def __init__(self, model_name=None, loras=[], image_size=(1024, 1024), inference_steps=40, guidance_scale=4.123817, images_per_prompt=5, adapter_weights=None):
         self.model_name = model_name
         self.loras = loras or []
