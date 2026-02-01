@@ -8,7 +8,7 @@ from sdxl_image_generator.sdxl_model_pipeline.model_loader_base import ModelLoad
 
 
 class ModelLoaderCLI(ModelLoaderBase):
-    def __init__(self, image_size=(1024, 1024), guidance_scale=4.123817, inference_steps=40, images_per_prompt=5, seed=None, guidance_rescale=0.0):
+    def __init__(self, image_size=(1024, 1024), guidance_scale=4.123817, inference_steps=40, images_per_prompt=5, seed=None, guidance_rescale=0.0, adapter_weights=None,):
         super().__init__()
         self.image_width = image_size[0]
         self.image_height = image_size[1]
@@ -17,6 +17,7 @@ class ModelLoaderCLI(ModelLoaderBase):
         self.images_per_prompt = images_per_prompt
         self.seed = seed
         self.guidance_rescale = guidance_rescale
+        self.adapter_weights = adapter_weights or []
 
     def generate_images(self, prompt, negative_prompt):
         if not self.pipe or not self.compel:

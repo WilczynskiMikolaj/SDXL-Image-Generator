@@ -11,7 +11,7 @@ HeunDiscreteScheduler,
 )
 
 class ModelLoaderBase(ABC):
-    def __init__(self, adapter_weights=None, available_models=None, available_loras=None, schedulers=None):
+    def __init__(self, available_models=None, available_loras=None, schedulers=None):
         self.loaded_model_name = None
         self.active_loras = None
         self.active_scheduler = None
@@ -19,15 +19,15 @@ class ModelLoaderBase(ABC):
         self.pipe: StableDiffusionXLPipeline = None
         self.compel: CompelForSDXL = None
 
-        self.scheduler_map = schedulers or {
+        self.available_models = available_models or {}
+        self.available_loras = available_loras or {}
+        self.available_schedulers = schedulers or {
             "dpmpp_2m": DPMSolverMultistepScheduler,
             "euler_a": EulerAncestralDiscreteScheduler,
             "euler": EulerDiscreteScheduler,
             "ddim": DDIMScheduler,
             "heun": HeunDiscreteScheduler}
-        self.available_models = available_models or {}
-        self.available_loras = available_loras or {}
-        self.adapter_weights = adapter_weights or []
+
 
     def load_loras(self, loras, adapter_weights=None):
         if not self.pipe:
@@ -36,7 +36,6 @@ class ModelLoaderBase(ABC):
         if not loras:
             self.pipe.disable_lora()
             self.active_loras = []
-            self.adapter_weights = None
             return
         
         if self.active_loras:
@@ -70,7 +69,6 @@ class ModelLoaderBase(ABC):
         self.pipe.set_adapters(loras, adapter_weights=adapter_weights)
 
         self.active_loras = loras
-        self.adapter_weights = adapter_weights
 
     def _initialize_pipeline(self, model_name):
         model_source = self.available_models[model_name]
@@ -100,7 +98,7 @@ class ModelLoaderBase(ABC):
 
         name = name.lower()
         
-        if name not in self.scheduler_map:
+        if name not in self.available_schedulers:
             raise ValueError(f"Unknown scheduler '{name}'. " f"Available: {list(self.scheduler_map.keys())}")
         SchedulerClass = self.scheduler_map[name]
         self.pipe.scheduler = SchedulerClass.from_config(self.pipe.scheduler.config)
