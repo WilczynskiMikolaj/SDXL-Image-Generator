@@ -19,8 +19,8 @@ class ModelLoaderBase(ABC):
         self.pipe: StableDiffusionXLPipeline = None
         self.compel: CompelForSDXL = None
 
-        self.available_models = available_models or {}
-        self.available_loras = available_loras or {}
+        self.available_models = available_models or []
+        self.available_loras = available_loras or []
         self.available_schedulers = schedulers or {
             "dpmpp_2m": DPMSolverMultistepScheduler,
             "euler_a": EulerAncestralDiscreteScheduler,
@@ -71,7 +71,7 @@ class ModelLoaderBase(ABC):
         self.active_loras = loras
 
     def _initialize_pipeline(self, model_name):
-        model_source = self.available_models[model_name]
+        model_source = f"/home/mikolaj/projects/SDXL-CLI-Generator/model_checkpoints/{model_name}"
         if isinstance(model_source, str) and model_source.endswith((".safetensors", ".ckpt")):
             pipe = StableDiffusionXLPipeline.from_single_file(model_source, torch_dtype=torch.float16, use_safetensors=True)
         else:

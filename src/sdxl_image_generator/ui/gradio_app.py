@@ -1,14 +1,15 @@
 import gradio as gr
-from sdxl_image_generator.utils.utils import get_all_directory_elements
+from sdxl_image_generator.utils.utils import get_all_directory_elements, choose_folder
+from sdxl_image_generator.utils.utils import ICON_PATH
 from sdxl_image_generator.sdxl_model_pipeline.model_loader_for_ui import ModelLoaderUI
 
-
 def create_ui():
-    model_checkpoint_names = get_all_directory_elements("model_checkpoints")
-    lora_names = get_all_directory_elements("loras")
+    model_checkpoint_names = get_all_directory_elements("model_checkpoints", project_directory=True)
+    lora_names = get_all_directory_elements("loras", project_directory=True)
     scheduler_names = ["Default", "dpmpp_2m", "euler_a", "euler", "ddim", "heun"]
 
     model_loader = ModelLoaderUI(model_checkpoint_names, lora_names)
+    available_models = ["Default", *model_checkpoint_names]
     
     with gr.Blocks(fill_width=True, fill_height=True) as demo:
         lora_element_state = gr.State([{"name":lora, "enabled": False, "adapter_weight": 0.0} for lora in lora_names])
@@ -16,8 +17,14 @@ def create_ui():
         gr.Markdown("# SDXL-CLI-GENERATOR GUI")
         with gr.Row(equal_height=True):
             with gr.Tab("Generation", scale=1):
-
-                models_dropdown = gr.Dropdown(choices=["None", *model_checkpoint_names], label="Model Checkpoint", interactive=True, multiselect=False, value="None")
+                with gr.Group():
+                    models_dropdown = gr.Dropdown(choices=available_models, label="Model Checkpoint", interactive=True, multiselect=False, value=available_models[0])
+                    dropdown_button = gr.Button(value="Select Models Folder", variant="secondary", icon=ICON_PATH)
+                    @dropdown_button.click(outputs=[models_dropdown])
+                    def get_models_path():
+                        model_folder = choose_folder()
+                        available_models = ["Default", *get_all_directory_elements(model_folder, project_directory=False)]
+                        return gr.Dropdown(choices=available_models, label="Model Checkpoint", interactive=True, multiselect=False, value=available_models[0], scale=8)
                 schedulers_dropdown = gr.Dropdown(choices=scheduler_names, label="Scheduler", interactive=True, multiselect=False, value="Default")
                 positive_prompt = gr.Textbox(label="Positive Prompt", lines=6)
                 negative_prompt = gr.Textbox(label="Negative Prompt", lines=6)
@@ -67,9 +74,9 @@ def create_ui():
                 gallery = gr.Gallery(preview=True, object_fit="contain")
 
         @generate_button.click(inputs=[models_dropdown, positive_prompt, negative_prompt, width, height, inference_steps, guidance_scale, images_per_prompt, lora_element_state, seed, guidance_rescale, schedulers_dropdown], outputs=gallery)
-        def generate():
-            config = {"model": models_dropdown.value, "prompt": positive_prompt.value, "negative_prompt": negative_prompt.value, "image_width": width.value, "image_height": height.value, "inference_steps": inference_steps.value, "guidance_scale": guidance_scale.value, 
-                      "images_per_prompt": images_per_prompt.value, "seed": seed.value, "guidance_rescale": guidance_rescale.value}
+        def generate(models_dropdown, positive_prompt, negative_prompt, width, height, inference_steps, guidance_scale, images_per_prompt, lora_element_state, seed, guidance_rescale, schedulers_dropdown):
+            config = {"model": models_dropdown, "prompt": positive_prompt, "negative_prompt": negative_prompt, "image_width": width, "image_height": height, "inference_steps": inference_steps, "guidance_scale": guidance_scale, 
+                      "images_per_prompt": images_per_prompt, "seed": seed, "guidance_rescale": guidance_rescale}
 
             model_loader.load_model(model_name=config["model"])
 
