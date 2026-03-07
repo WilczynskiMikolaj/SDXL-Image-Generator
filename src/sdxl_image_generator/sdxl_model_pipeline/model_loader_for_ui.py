@@ -24,4 +24,4 @@ class ModelLoaderUI(ModelLoaderBase):
                 width=config["image_width"], height=config["image_height"], num_images_per_prompt=config["images_per_prompt"], 
                 generator=generator, guidance_rescale=config["guidance_rescale"])
             
-        return generated_images
+        return generated_images.images

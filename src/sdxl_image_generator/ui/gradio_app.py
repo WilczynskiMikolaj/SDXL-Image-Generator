@@ -1,5 +1,5 @@
 import gradio as gr
-from sdxl_image_generator.utils.utils import get_all_directory_elements, choose_folder
+from sdxl_image_generator.utils.utils import get_all_directory_elements, choose_folder, get_directory
 from sdxl_image_generator.utils.utils import ICON_PATH
 from sdxl_image_generator.sdxl_model_pipeline.model_loader_for_ui import ModelLoaderUI
 
@@ -24,6 +24,7 @@ def create_ui():
                     def get_models_path():
                         model_folder = choose_folder()
                         available_models = ["Default", *get_all_directory_elements(model_folder, project_directory=False)]
+                        model_loader.load_model_selection(available_models, get_directory(model_folder))
                         return gr.Dropdown(choices=available_models, label="Model Checkpoint", interactive=True, multiselect=False, value=available_models[0], scale=8)
                 schedulers_dropdown = gr.Dropdown(choices=scheduler_names, label="Scheduler", interactive=True, multiselect=False, value="Default")
                 positive_prompt = gr.Textbox(label="Positive Prompt", lines=6)
@@ -80,12 +81,13 @@ def create_ui():
 
             model_loader.load_model(model_name=config["model"])
 
-            loras_selected = [lora["name"] for lora in lora_element_state.value if lora["enabled"]]
-            adapter_weights = [lora["adapter_weight"] for lora in lora_element_state.value if lora["enabled"]]
+            loras_selected = [lora["name"] for lora in lora_element_state if lora["enabled"]]
+            adapter_weights = [lora["adapter_weight"] for lora in lora_element_state if lora["enabled"]]
             model_loader.load_loras(loras=loras_selected, adapter_weights=adapter_weights)
 
             model_loader.initialize_compel()
-            model_loader.generate_images(config=config)
-            return None
+            images = model_loader.generate_images(config=config)
+            return images
+            
 
     return demo

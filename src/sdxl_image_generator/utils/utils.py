@@ -9,7 +9,6 @@ ICON_PATH = PACKAGE_ROOT / "assets" / "file_explorer_icon.png"
 
 def get_directory(folder: Union[str, Path]) -> Path:
     path = PACKAGE_ROOT / folder
-    path.mkdir(parents=True, exist_ok=True)
     return path
 
 def get_all_directory_elements(folder_name: Union[str, Path], project_directory: bool) -> List[str]:
