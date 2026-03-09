@@ -22,8 +22,8 @@ class ModelLoaderBase(ABC):
         self.pipe: StableDiffusionXLPipeline = None
         self.compel: CompelForSDXL = None
 
-        self.available_models = available_models or ["Default"]
-        self.available_loras = available_loras or ["Default"]
+        self.available_models = available_models or ["Default (stable-diffusion-xl-base-1.0)"]
+        self.available_loras = available_loras or []
         self.available_schedulers = schedulers or {
             "dpmpp_2m": DPMSolverMultistepScheduler,
             "euler_a": EulerAncestralDiscreteScheduler,
@@ -31,6 +31,7 @@ class ModelLoaderBase(ABC):
             "ddim": DDIMScheduler,
             "heun": HeunDiscreteScheduler}
         self.models_directory: Path = PACKAGE_ROOT / "model_checkpoints"
+        self.loras_directory = PACKAGE_ROOT / "loras"
 
 
     def load_loras(self, loras, adapter_weights=None):
@@ -75,7 +76,7 @@ class ModelLoaderBase(ABC):
         self.active_loras = loras
 
     def _initialize_pipeline(self, model_name:str):
-        if model_name != "Default" and model_name.endswith((".safetensors", ".ckpt")):
+        if model_name != "Default (stable-diffusion-xl-base-1.0)" and model_name.endswith((".safetensors", ".ckpt")):
             pipe = StableDiffusionXLPipeline.from_single_file(self.models_directory / model_name, torch_dtype=torch.float16, use_safetensors=True)
         else:
             pipe = StableDiffusionXLPipeline.from_pretrained("stabilityai/stable-diffusion-xl-base-1.0", torch_dtype=torch.float16, use_safetensors=True)
@@ -95,9 +96,13 @@ class ModelLoaderBase(ABC):
         if self.active_scheduler:
             self.change_scheduler(self.active_scheduler)
     
-    def load_model_selection(self, available_models, models_directory: Union[str, Path]) -> None:
+    def load_model_selection(self, available_models: list, models_directory: Union[str, Path]) -> None:
         self.models_directory = Path(models_directory)
         self.available_models = available_models
+    
+    def load_loras_selection(self, available_loras: list, loras_directory: Union[str, Path]) -> None:
+        self.available_loras = Path(loras_directory)
+        self.available_loras = available_loras
 
     def change_scheduler(self, name: str):
         if not self.pipe:

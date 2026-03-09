@@ -6,6 +6,7 @@ from tkinter import filedialog
 
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 ICON_PATH = PACKAGE_ROOT / "assets" / "file_explorer_icon.png"
+PROMPT_HISTORY_FILE = PACKAGE_ROOT / "prompt_history.json"
 
 def get_directory(folder: Union[str, Path]) -> Path:
     path = PACKAGE_ROOT / folder
