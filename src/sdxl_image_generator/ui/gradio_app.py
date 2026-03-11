@@ -1,6 +1,6 @@
 import gradio as gr
-from sdxl_image_generator.utils.utils import get_all_directory_elements, choose_folder, get_directory
-from sdxl_image_generator.utils.utils import ICON_PATH
+from sdxl_image_generator.utils.utils import get_all_directory_elements, choose_folder, get_directory, read_history_from_jsonl, write_prompt_history, apply_config
+from sdxl_image_generator.utils.utils import ICON_PATH, PROMPT_HISTORY_FILE
 from sdxl_image_generator.sdxl_model_pipeline.model_loader_for_ui import ModelLoaderUI
 
 def create_ui():
@@ -11,10 +11,11 @@ def create_ui():
     available_loras = [*lora_names]
 
     model_loader = ModelLoaderUI(available_models, lora_names)
+    prompt_history = read_history_from_jsonl(PROMPT_HISTORY_FILE) or []
     
     with gr.Blocks(fill_width=True, fill_height=True) as demo:
         lora_element_state = gr.State({})
-        chat_history = []
+        current_config = gr.State({})
 
         gr.Markdown("# SDXL GENERATOR GUI")
         with gr.Row(equal_height=True):
@@ -28,10 +29,10 @@ def create_ui():
                         available_models = ["Default", *get_all_directory_elements(model_folder, project_directory=False)]
                         model_loader.load_model_selection(available_models, get_directory(model_folder))
                         return gr.Dropdown(choices=available_models, label="Model Checkpoint", interactive=True, multiselect=False, value=available_models[0], scale=8)
-                schedulers_dropdown = gr.Dropdown(choices=scheduler_names, label="Scheduler", interactive=True, multiselect=False, value="Default")
                 positive_prompt = gr.Textbox(label="Positive Prompt", lines=6)
                 negative_prompt = gr.Textbox(label="Negative Prompt", lines=6)
 
+                schedulers_dropdown = gr.Dropdown(choices=scheduler_names, label="Scheduler", interactive=True, multiselect=False, value="Default")
                 width = gr.Slider(64, 6144, step=64, label="Image width", value=1024, interactive=True)
                 height = gr.Slider(64, 6144, step=64, label="Image height", value=1024, interactive=True)
                 inference_steps = gr.Slider(1, 100, step=1, label="Inference steps", value=30, interactive=True)
@@ -71,9 +72,41 @@ def create_ui():
                 gallery = gr.Gallery(preview=True, object_fit="contain")
 
             with gr.Sidebar(position="right"):
-                prompt_history = gr.Chatbot(chat_history)
+                gr.Markdown("## Prompt History")
+                @gr.render()
+                def render_prompt_history():
+                    for prompt in prompt_history:
+                        title = f"Prompt {prompt['prompt_id']} -  {prompt['positive_prompt'][:20]}..."
+                        with gr.Accordion(title, open=False):
+                            gr.Markdown(f"""## Prompt
 
-        @generate_button.click(inputs=[models_dropdown, positive_prompt, negative_prompt, width, height, inference_steps, guidance_scale, images_per_prompt, lora_element_state, seed, guidance_rescale, schedulers_dropdown, prompt_history], outputs=[gallery, prompt_history])
+                            **Positive Prompt**
+                            > {prompt['positive_prompt']}
+
+                            **Negative Prompt**
+                            > {prompt['negative_prompt']}
+                            """)
+                            load_prompt_btn = gr.Button("Load prompt")
+                            load_prompt_btn.click( fn=lambda p=prompt: apply_config(p),
+                                            outputs=[
+                                                positive_prompt,
+                                                negative_prompt,
+                                                schedulers_dropdown,
+                                                width,
+                                                height,
+                                                inference_steps,
+                                                guidance_scale,
+                                                guidance_rescale,
+                                                images_per_prompt,
+                                                seed
+                                            ])
+                                
+
+                            
+
+                    
+
+        @generate_button.click(inputs=[models_dropdown, positive_prompt, negative_prompt, width, height, inference_steps, guidance_scale, images_per_prompt, lora_element_state, seed, guidance_rescale, schedulers_dropdown], outputs=[gallery])
         def generate(models_dropdown, positive_prompt, negative_prompt, width, height, inference_steps, guidance_scale, images_per_prompt, lora_element_state, seed, guidance_rescale, scheduler, prompt_history):
             config = {"model": models_dropdown, "prompt": positive_prompt, "negative_prompt": negative_prompt, "image_width": width, "image_height": height, "inference_steps": inference_steps, "guidance_scale": guidance_scale, 
                       "images_per_prompt": images_per_prompt, "seed": seed, "guidance_rescale": guidance_rescale, "loras": lora_element_state, "scheduler": scheduler}
