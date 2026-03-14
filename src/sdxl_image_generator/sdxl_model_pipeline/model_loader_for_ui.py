@@ -11,7 +11,7 @@ class ModelLoaderUI(ModelLoaderBase):
         else:
             seed = config["seed"]
 
-        conditioning = self.compel(config["prompt"], negative_prompt=config["negative_prompt"])
+        conditioning = self.compel(config["positive_prompt"], negative_prompt=config["negative_prompt"])
 
         generator = torch.Generator("cuda").manual_seed(seed)
 

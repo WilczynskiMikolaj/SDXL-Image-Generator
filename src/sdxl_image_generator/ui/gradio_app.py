@@ -11,11 +11,13 @@ def create_ui():
     available_loras = [*lora_names]
 
     model_loader = ModelLoaderUI(available_models, lora_names)
-    prompt_history = read_history_from_jsonl(PROMPT_HISTORY_FILE) or []
+    initial_prompt_history = read_history_from_jsonl(PROMPT_HISTORY_FILE) or []
+    last_prompt_id = initial_prompt_history[-1]["prompt_id"]
     
     with gr.Blocks(fill_width=True, fill_height=True) as demo:
         lora_element_state = gr.State({})
-        current_config = gr.State({})
+        prompt_history_state = gr.State(initial_prompt_history)
+        current_prompt_id = gr.State(last_prompt_id + 1)
 
         gr.Markdown("# SDXL GENERATOR GUI")
         with gr.Row(equal_height=True):
@@ -73,8 +75,8 @@ def create_ui():
 
             with gr.Sidebar(position="right"):
                 gr.Markdown("## Prompt History")
-                @gr.render()
-                def render_prompt_history():
+                @gr.render(inputs=prompt_history_state)
+                def render_prompt_history(prompt_history):
                     for prompt in prompt_history:
                         title = f"Prompt {prompt['prompt_id']} -  {prompt['positive_prompt'][:20]}..."
                         with gr.Accordion(title, open=False):
@@ -106,21 +108,27 @@ def create_ui():
 
                     
 
-        @generate_button.click(inputs=[models_dropdown, positive_prompt, negative_prompt, width, height, inference_steps, guidance_scale, images_per_prompt, lora_element_state, seed, guidance_rescale, schedulers_dropdown], outputs=[gallery])
-        def generate(models_dropdown, positive_prompt, negative_prompt, width, height, inference_steps, guidance_scale, images_per_prompt, lora_element_state, seed, guidance_rescale, scheduler, prompt_history):
-            config = {"model": models_dropdown, "prompt": positive_prompt, "negative_prompt": negative_prompt, "image_width": width, "image_height": height, "inference_steps": inference_steps, "guidance_scale": guidance_scale, 
+        @generate_button.click(inputs=[models_dropdown, positive_prompt, negative_prompt, width, height, inference_steps, guidance_scale, images_per_prompt, lora_element_state, seed, guidance_rescale, schedulers_dropdown, prompt_history_state, current_prompt_id], outputs=[gallery, prompt_history_state, current_prompt_id])
+        def generate(models_dropdown, positive_prompt, negative_prompt, width, height, inference_steps, guidance_scale, images_per_prompt, lora_element_state, seed, guidance_rescale, scheduler, prompt_history, prompt_id):
+            config = {"prompt_id": prompt_id,"model": models_dropdown, "positive_prompt": positive_prompt, "negative_prompt": negative_prompt, "image_width": width, "image_height": height, "inference_steps": inference_steps, "guidance_scale": guidance_scale, 
                       "images_per_prompt": images_per_prompt, "seed": seed, "guidance_rescale": guidance_rescale, "loras": lora_element_state, "scheduler": scheduler}
 
             model_loader.load_model(model_name=config["model"])
+            print("model_load_ok")
 
             loras_selected = list(lora_element_state.keys())
             adapter_weights = list(lora_element_state.values())
             model_loader.load_loras(loras=loras_selected, adapter_weights=adapter_weights)
+            print("loras_load_ok")
 
             model_loader.initialize_compel()
+            print("compel_init_ok")
             images = model_loader.generate_images(config=config)
-            prompt_history.append({"role": "user", "content": positive_prompt})
-            return images, prompt_history
+            print("image_generation_ok")
+
+            write_prompt_history(config, PROMPT_HISTORY_FILE)
+            print("prompt_write_ok")
+            return images, [*prompt_history, config], prompt_id+1
             
 
     return demo
