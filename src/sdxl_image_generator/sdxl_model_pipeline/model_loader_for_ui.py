@@ -2,7 +2,7 @@ from sdxl_image_generator.sdxl_model_pipeline.model_loader_base import ModelLoad
 import torch
 
 class ModelLoaderUI(ModelLoaderBase):
-    def generate_images(self, config):
+    def generate_images(self, config, use_refiner=False):
         if not self.pipe or not self.compel:
             raise RuntimeError("Model or Compel not initialized")
 
@@ -22,6 +22,15 @@ class ModelLoaderUI(ModelLoaderBase):
                 negative_pooled_prompt_embeds=conditioning.negative_pooled_embeds,
                 num_inference_steps=config["inference_steps"], guidance_scale=config["guidance_scale"], 
                 width=config["image_width"], height=config["image_height"], num_images_per_prompt=config["images_per_prompt"], 
-                generator=generator, guidance_rescale=config["guidance_rescale"])
+                generator=generator, guidance_rescale=config["guidance_rescale"], output_type="latent")
             
+        self.clear_cache()
+        print("Cache_cleared_ok")
+
         return generated_images.images
+
+    def img2img(self):
+        return 
+    
+    def refine_image(self, refiner_model, config):
+        pass

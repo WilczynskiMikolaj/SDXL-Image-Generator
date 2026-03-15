@@ -157,6 +157,4 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-prompt_history.jsonl
-
 TODO.txt

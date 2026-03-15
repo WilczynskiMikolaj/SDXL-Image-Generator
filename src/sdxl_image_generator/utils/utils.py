@@ -3,11 +3,14 @@ from typing import Union, List
 import tkinter as tk
 from tkinter import filedialog
 import json
+import re
+import datetime
 
 
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-ICON_PATH = PACKAGE_ROOT / "assets" / "file_explorer_icon.png"
-PROMPT_HISTORY_FILE = PACKAGE_ROOT / "prompt_history.jsonl"
+SELECT_FOLDER_ICON_PATH = PACKAGE_ROOT / "assets" / "file_explorer_icon.png"
+PROMPT_HISTORY_FILE = PACKAGE_ROOT / "logs" / "prompt_history.jsonl"
+IMAGES_OUTPUT_FOLDER = PACKAGE_ROOT / "images"
 
 def get_directory(folder: Union[str, Path]) -> Path:
     path = PACKAGE_ROOT / folder
@@ -63,3 +66,14 @@ def apply_config(cfg):
         cfg["images_per_prompt"],
         cfg["seed"]
     )
+
+def save_all_images(generated_images, id, prompt, output_folder):
+    output_folder = Path(output_folder)
+    output_folder.mkdir(parents=True, exist_ok=True)
+
+    safe_prompt = re.sub(r'[^\w\-_. ]', '_', prompt[:15])
+    current_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    for i, image in enumerate(generated_images):
+        filepath = output_folder / f"Prompt_{id}_{safe_prompt}_{i}_{current_time}.png"
+        image.save(filepath)

@@ -1,7 +1,10 @@
 import gradio as gr
-from sdxl_image_generator.utils.utils import get_all_directory_elements, choose_folder, get_directory, read_history_from_jsonl, write_prompt_history, apply_config
-from sdxl_image_generator.utils.utils import ICON_PATH, PROMPT_HISTORY_FILE
+from sdxl_image_generator.utils.utils import get_all_directory_elements, choose_folder, get_directory, read_history_from_jsonl, write_prompt_history, apply_config, save_all_images
+from sdxl_image_generator.utils.utils import SELECT_FOLDER_ICON_PATH, PROMPT_HISTORY_FILE, IMAGES_OUTPUT_FOLDER
 from sdxl_image_generator.sdxl_model_pipeline.model_loader_for_ui import ModelLoaderUI
+from sdxl_image_generator.ui.components import random_seed_btn
+import random
+
 
 def create_ui():
     model_checkpoint_names = get_all_directory_elements("model_checkpoints", project_directory=True)
@@ -18,13 +21,15 @@ def create_ui():
         lora_element_state = gr.State({})
         prompt_history_state = gr.State(initial_prompt_history)
         current_prompt_id = gr.State(last_prompt_id + 1)
+        images_output_dir = gr.State(IMAGES_OUTPUT_FOLDER)
+    
 
         gr.Markdown("# SDXL GENERATOR GUI")
         with gr.Row(equal_height=True):
             with gr.Tab("Generation", scale=1):
                 with gr.Group():
                     models_dropdown = gr.Dropdown(choices=available_models, label="Model Checkpoint", interactive=True, multiselect=False, value=available_models[0])
-                    dropdown_button = gr.Button(value="Select Models Folder", variant="secondary", icon=ICON_PATH)
+                    dropdown_button = gr.Button(value="Select Models Folder", variant="secondary", icon=SELECT_FOLDER_ICON_PATH)
                     @dropdown_button.click(outputs=[models_dropdown])
                     def get_models_path():
                         model_folder = choose_folder()
@@ -41,12 +46,13 @@ def create_ui():
                 guidance_scale = gr.Slider(0.0, 12.0, step=0.01, label="CFG", value=7.0, interactive=True)
                 guidance_rescale = gr.Slider(0.0, 1.5, step=0.01, label="CFG Rescale", value=0.5, interactive=True)
                 images_per_prompt = gr.Slider(1, 20, step=1, label="Images per prompt", value=1, interactive=True)
-                seed = gr.Number(0, label="Seed", minimum=0, maximum=2147483647)
+                seed = gr.Number(0, label="Seed", minimum=0, maximum=2**32 - 1, buttons=[random_seed_btn])
+                random_seed_btn.click(lambda: random.randint(0, 2**32 - 1), outputs=seed)
 
                 generate_button = gr.Button("Generate")
 
             with gr.Tab("Lora", scale=1):
-                lora_folder_selection_button = gr.Button(value="Select Loras Folder", icon=ICON_PATH)
+                lora_folder_selection_button = gr.Button(value="Select Loras Folder", icon=SELECT_FOLDER_ICON_PATH)
                 lora_dropdown = gr.Dropdown(choices=available_loras, label="Loras", interactive=True, multiselect=True)
                 @lora_folder_selection_button.click(outputs=[lora_dropdown, lora_element_state])
                 def get_models_path():
@@ -69,6 +75,13 @@ def create_ui():
                         weight = state[lora]
                         slider = gr.Slider(0.0, 2.0, value=weight, step=0.05, label=f"{lora} weight", interactive=True)
                         slider.release(fn=lambda v, s, name=lora: update_weight(v, s, name), inputs=[slider, lora_element_state], outputs=lora_element_state)
+
+            with gr.Tab("Configuration", scale=1):
+                with gr.Group():
+                    save_all_checkbox = gr.Checkbox(label="Auto save images")
+                    change_output_dir_button = gr.Button("Select Image Output Folder", icon=SELECT_FOLDER_ICON_PATH)
+                    change_output_dir_button.click(choose_folder, outputs=images_output_dir)
+                
          
             with gr.Column(scale=4):
                 gallery = gr.Gallery(preview=True, object_fit="contain")
@@ -102,14 +115,11 @@ def create_ui():
                                                 images_per_prompt,
                                                 seed
                                             ])
-                                
-
-                            
 
                     
-
-        @generate_button.click(inputs=[models_dropdown, positive_prompt, negative_prompt, width, height, inference_steps, guidance_scale, images_per_prompt, lora_element_state, seed, guidance_rescale, schedulers_dropdown, prompt_history_state, current_prompt_id], outputs=[gallery, prompt_history_state, current_prompt_id])
-        def generate(models_dropdown, positive_prompt, negative_prompt, width, height, inference_steps, guidance_scale, images_per_prompt, lora_element_state, seed, guidance_rescale, scheduler, prompt_history, prompt_id):
+        @generate_button.click(inputs=[models_dropdown, positive_prompt, negative_prompt, width, height, inference_steps, guidance_scale, images_per_prompt, lora_element_state, seed, 
+                                       guidance_rescale, schedulers_dropdown, prompt_history_state, current_prompt_id, save_all_checkbox, images_output_dir], outputs=[gallery, prompt_history_state, current_prompt_id])
+        def generate(models_dropdown, positive_prompt, negative_prompt, width, height, inference_steps, guidance_scale, images_per_prompt, lora_element_state, seed, guidance_rescale, scheduler, prompt_history, prompt_id, save_checkbox, output_dir):
             config = {"prompt_id": prompt_id,"model": models_dropdown, "positive_prompt": positive_prompt, "negative_prompt": negative_prompt, "image_width": width, "image_height": height, "inference_steps": inference_steps, "guidance_scale": guidance_scale, 
                       "images_per_prompt": images_per_prompt, "seed": seed, "guidance_rescale": guidance_rescale, "loras": lora_element_state, "scheduler": scheduler}
 
@@ -128,6 +138,10 @@ def create_ui():
 
             write_prompt_history(config, PROMPT_HISTORY_FILE)
             print("prompt_write_ok")
+
+            if save_checkbox:
+                save_all_images(images, prompt_id, config["positive_prompt"], output_dir)
+
             return images, [*prompt_history, config], prompt_id+1
             
 

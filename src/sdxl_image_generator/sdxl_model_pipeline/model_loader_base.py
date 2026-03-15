@@ -1,4 +1,4 @@
-from diffusers import StableDiffusionXLPipeline
+from diffusers import StableDiffusionXLPipeline, StableDiffusionXLImg2ImgPipeline
 import torch
 from compel import CompelForSDXL
 from typing import Union
@@ -16,11 +16,13 @@ from sdxl_image_generator.utils.utils import PACKAGE_ROOT
 class ModelLoaderBase(ABC):
     def __init__(self, available_models=None, available_loras=None, schedulers=None):
         self.loaded_model_name = None
+        self.loaded_refiner_name = None
         self.active_loras = None
         self.active_scheduler = None
 
-        self.pipe: StableDiffusionXLPipeline = None
+        self.pipe: Union[StableDiffusionXLImg2ImgPipeline, StableDiffusionXLPipeline] = None
         self.compel: CompelForSDXL = None
+        self.refiner: StableDiffusionXLImg2ImgPipeline = None
 
         self.available_models = available_models or ["Default (stable-diffusion-xl-base-1.0)"]
         self.available_loras = available_loras or []
@@ -31,7 +33,11 @@ class ModelLoaderBase(ABC):
             "ddim": DDIMScheduler,
             "heun": HeunDiscreteScheduler}
         self.models_directory: Path = PACKAGE_ROOT / "model_checkpoints"
+        self.refiner_directory: Path = PACKAGE_ROOT / "refiners"
         self.loras_directory = PACKAGE_ROOT / "loras"
+
+        self.refiner_on_gpu = False
+        self.model_on_gpu = False
 
 
     def load_loras(self, loras, adapter_weights=None):
@@ -77,21 +83,21 @@ class ModelLoaderBase(ABC):
 
     def _initialize_pipeline(self, model_name:str):
         if model_name != "Default (stable-diffusion-xl-base-1.0)" and model_name.endswith((".safetensors", ".ckpt")):
-            pipe = StableDiffusionXLPipeline.from_single_file(self.models_directory / model_name, torch_dtype=torch.float16, use_safetensors=True)
+            self.pipe = StableDiffusionXLPipeline.from_single_file(self.models_directory / model_name, torch_dtype=torch.float16, use_safetensors=True)
         else:
-            pipe = StableDiffusionXLPipeline.from_pretrained("stabilityai/stable-diffusion-xl-base-1.0", torch_dtype=torch.float16, use_safetensors=True)
+            self.pipe = StableDiffusionXLPipeline.from_pretrained("stabilityai/stable-diffusion-xl-base-1.0", torch_dtype=torch.float16, use_safetensors=True)
 
-        pipe = pipe.to("cuda")
+        self.pipe.to("cuda")
 
-        pipe.vae.enable_slicing()
-        pipe.vae.enable_tiling()
+        self.pipe.vae.enable_slicing()
+        self.pipe.vae.enable_tiling()
 
         try:
-            pipe.enable_xformers_memory_efficient_attention()
+            self.pipe.enable_xformers_memory_efficient_attention()
         except Exception:
             pass
 
-        self.pipe = pipe
+        self.model_on_gpu = True
 
         if self.active_scheduler:
             self.change_scheduler(self.active_scheduler)
@@ -139,6 +145,31 @@ class ModelLoaderBase(ABC):
             pipe=self.pipe,
             device=self.pipe.device)
         
+    def clear_cache(self):
+        torch.cuda.empty_cache()
+
+    def initialize_refiner(self, refiner_model):
+        if self.refiner and refiner_model == self.loaded_refiner_name:
+            return
+
+        if self.refiner:
+            del self.refiner
+
+        if refiner_model != "Default (stable-diffusion-base-refiner-1.0)" and refiner_model.endswith((".safetensors", ".ckpt")):
+            self.refiner = StableDiffusionXLImg2ImgPipeline.from_single_file(self.refiner_directory / refiner_model, torch_dtype=torch.float16, use_safetensors=True)
+        else:
+            self.refiner = StableDiffusionXLImg2ImgPipeline.from_pretrained("stabilityai/stable-diffusion-xl-refiner-1.0", torch_dtype=torch.float16, use_safetensors=True)
+
+        self.loaded_refiner_name = refiner_model
+        
     @abstractmethod
     def generate_images(self):
+        pass
+
+    @abstractmethod
+    def img2img(self):
+        pass
+
+    @abstractmethod
+    def refine_image(self):
         pass
