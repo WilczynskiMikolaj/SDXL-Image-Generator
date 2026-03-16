@@ -11,7 +11,7 @@ EulerDiscreteScheduler,
 DDIMScheduler,
 HeunDiscreteScheduler,
 )
-from sdxl_image_generator.utils.utils import PACKAGE_ROOT
+from sdxl_image_generator.utils.utils import PACKAGE_ROOT, PipelineType, ModelDevice
 
 class ModelLoaderBase(ABC):
     def __init__(self, available_models=None, available_loras=None, schedulers=None):
@@ -32,12 +32,13 @@ class ModelLoaderBase(ABC):
             "euler": EulerDiscreteScheduler,
             "ddim": DDIMScheduler,
             "heun": HeunDiscreteScheduler}
+        
         self.models_directory: Path = PACKAGE_ROOT / "model_checkpoints"
         self.refiner_directory: Path = PACKAGE_ROOT / "refiners"
         self.loras_directory = PACKAGE_ROOT / "loras"
 
         self.refiner_on_gpu = False
-        self.model_on_gpu = False
+        self.pipeline_on_gpu = False
 
 
     def load_loras(self, loras, adapter_weights=None):
@@ -69,25 +70,28 @@ class ModelLoaderBase(ABC):
             raise ValueError("adapter_weights length must match loras")
 
         for lora in loras:
-            weight_file = self.available_loras[lora]
-
             self.pipe.load_lora_weights(
-                "./loras",
-                weight_name=weight_file,
-                adapter_name=lora
-            )
+                str(self.loras_directory),
+                weight_name=lora,
+                adapter_name=lora)
 
         self.pipe.set_adapters(loras, adapter_weights=adapter_weights)
 
         self.active_loras = loras
 
-    def _initialize_pipeline(self, model_name:str):
+    def _initialize_pipeline(self, model_name:str, use_gpu:bool=True):
         if model_name != "Default (stable-diffusion-xl-base-1.0)" and model_name.endswith((".safetensors", ".ckpt")):
             self.pipe = StableDiffusionXLPipeline.from_single_file(self.models_directory / model_name, torch_dtype=torch.float16, use_safetensors=True)
         else:
             self.pipe = StableDiffusionXLPipeline.from_pretrained("stabilityai/stable-diffusion-xl-base-1.0", torch_dtype=torch.float16, use_safetensors=True)
 
-        self.pipe.to("cuda")
+        if self.active_scheduler:
+            self.change_scheduler(self.active_scheduler)
+
+        if use_gpu:
+            self._safe_load(PipelineType.TEXT2IMG, ModelDevice.GPU)
+        else:
+            self.pipeline_on_gpu = False
 
         self.pipe.vae.enable_slicing()
         self.pipe.vae.enable_tiling()
@@ -96,32 +100,7 @@ class ModelLoaderBase(ABC):
             self.pipe.enable_xformers_memory_efficient_attention()
         except Exception:
             pass
-
-        self.model_on_gpu = True
-
-        if self.active_scheduler:
-            self.change_scheduler(self.active_scheduler)
     
-    def load_model_selection(self, available_models: list, models_directory: Union[str, Path]) -> None:
-        self.models_directory = Path(models_directory)
-        self.available_models = available_models
-    
-    def load_loras_selection(self, available_loras: list, loras_directory: Union[str, Path]) -> None:
-        self.available_loras = Path(loras_directory)
-        self.available_loras = available_loras
-
-    def change_scheduler(self, name: str):
-        if not self.pipe:
-            raise RuntimeError("Pipeline not initialized")
-
-        name = name.lower()
-        
-        if name not in self.available_schedulers:
-            raise ValueError(f"Unknown scheduler '{name}'. " f"Available: {list(self.scheduler_map.keys())}")
-        SchedulerClass = self.scheduler_map[name]
-        self.pipe.scheduler = SchedulerClass.from_config(self.pipe.scheduler.config)
-        self.active_scheduler = name
-
     def load_model(self, model_name):
         if self.pipe and model_name == self.loaded_model_name:
             return
@@ -131,12 +110,32 @@ class ModelLoaderBase(ABC):
 
         if self.pipe:
             del self.pipe
-            torch.cuda.empty_cache()
+            if self.pipeline_on_gpu:
+                self.clear_cache()
 
         self._initialize_pipeline(model_name)
 
         self.loaded_model_name = model_name
+    
+    def load_model_selection(self, available_models: list, models_directory: Union[str, Path]) -> None:
+        self.models_directory = Path(models_directory)
+        self.available_models = available_models
+    
+    def load_loras_selection(self, available_loras: list, loras_directory: Union[str, Path]) -> None:
+        self.loras_directory = Path(loras_directory)
+        self.available_loras = available_loras
 
+    def change_scheduler(self, name: str):
+        if not self.pipe:
+            raise RuntimeError("Pipeline not initialized")
+
+        name = name.lower()
+        
+        if name not in self.available_schedulers:
+            raise ValueError(f"Unknown scheduler '{name}'. " f"Available: {list(self.available_schedulers.keys())}")
+        SchedulerClass = self.available_schedulers[name]
+        self.pipe.scheduler = SchedulerClass.from_config(self.pipe.scheduler.config)
+        self.active_scheduler = name
 
     def initialize_compel(self):
         if not self.pipe:
@@ -148,20 +147,104 @@ class ModelLoaderBase(ABC):
     def clear_cache(self):
         torch.cuda.empty_cache()
 
-    def initialize_refiner(self, refiner_model):
+    def load_refiner(self, refiner_model):
         if self.refiner and refiner_model == self.loaded_refiner_name:
             return
 
         if self.refiner:
             del self.refiner
+            if self.refiner_on_gpu:
+                self.clear_cache()
+        
+        self._initialize_refiner(refiner_model)
+        self.loaded_refiner_name = refiner_model
 
+    def _initialize_refiner(self, refiner_model, load_on_gpu=True):
         if refiner_model != "Default (stable-diffusion-base-refiner-1.0)" and refiner_model.endswith((".safetensors", ".ckpt")):
             self.refiner = StableDiffusionXLImg2ImgPipeline.from_single_file(self.refiner_directory / refiner_model, torch_dtype=torch.float16, use_safetensors=True)
         else:
             self.refiner = StableDiffusionXLImg2ImgPipeline.from_pretrained("stabilityai/stable-diffusion-xl-refiner-1.0", torch_dtype=torch.float16, use_safetensors=True)
 
-        self.loaded_refiner_name = refiner_model
+        if self.pipe:
+            self.refiner.vae = self.pipe.vae
+            self.refiner.text_encoder_2 = self.pipe.text_encoder_2
         
+        try:
+            self.refiner.enable_xformers_memory_efficient_attention()
+        except Exception:
+            pass
+
+        if load_on_gpu:
+            self._safe_load(PipelineType.REFINER, ModelDevice.GPU)
+        else:
+            self.refiner_on_gpu = False
+
+
+    def _safe_load(self, pipe_type: PipelineType, device: ModelDevice):
+        if pipe_type == PipelineType.TEXT2IMG:
+            if device == ModelDevice.GPU:
+                if self.refiner and self.refiner_on_gpu:
+                    self._load_on_cpu(PipelineType.REFINER)
+                    torch.cuda.empty_cache()
+                    self._load_on_gpu(PipelineType.TEXT2IMG)
+                else:
+                    self._load_on_gpu(PipelineType.TEXT2IMG)
+            elif device == ModelDevice.CPU:
+                self._load_on_cpu(PipelineType.TEXT2IMG)
+        elif pipe_type == PipelineType.IMG2IMG:
+            if device == ModelDevice.GPU:
+                if self.refiner and self.refiner_on_gpu:
+                    self._load_on_cpu(PipelineType.REFINER)
+                    torch.cuda.empty_cache()
+                    self._load_on_gpu(PipelineType.IMG2IMG)
+                else:
+                    self._load_on_gpu(PipelineType.IMG2IMG)
+            elif device == ModelDevice.CPU:
+                self._load_on_cpu(PipelineType.IMG2IMG)
+        elif pipe_type == PipelineType.REFINER:
+            if device == ModelDevice.GPU:
+                if self.pipe and self.pipeline_on_gpu:
+                    self._load_on_cpu(PipelineType.TEXT2IMG)
+                    torch.cuda.empty_cache()
+                    self._load_on_gpu(PipelineType.REFINER)
+                else:
+                    self._load_on_gpu(PipelineType.REFINER)
+            elif device == ModelDevice.CPU:
+                self._load_on_cpu(PipelineType.REFINER)
+
+    def _load_on_gpu(self, pipe_type: PipelineType):
+        match pipe_type:
+            case PipelineType.TEXT2IMG | PipelineType.IMG2IMG:
+                self.pipe.to("cuda")
+                self.pipeline_on_gpu = True
+            case PipelineType.REFINER:
+                self.refiner.to("cuda")
+                self.refiner_on_gpu = True
+
+    def _load_on_cpu(self, pipe_type: PipelineType):
+        match pipe_type:
+            case PipelineType.TEXT2IMG | PipelineType.IMG2IMG:
+                self.pipe.to("cpu")
+                self.pipeline_on_gpu = False
+            case PipelineType.REFINER:
+                self.refiner.to("cpu")
+                self.refiner_on_gpu = False
+
+        torch.cuda.empty_cache()
+        
+    def decode_latents(self, latents):
+        with torch.no_grad():
+            images = self.pipe.vae.decode(
+                latents / self.pipe.vae.config.scaling_factor
+            ).sample
+
+        images = images.detach()
+
+        from diffusers.image_processor import VaeImageProcessor
+        processor = VaeImageProcessor()
+
+        return processor.postprocess(images, output_type="pil")
+    
     @abstractmethod
     def generate_images(self):
         pass

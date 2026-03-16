@@ -5,12 +5,22 @@ from tkinter import filedialog
 import json
 import re
 import datetime
+from enum import Enum
 
 
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SELECT_FOLDER_ICON_PATH = PACKAGE_ROOT / "assets" / "file_explorer_icon.png"
 PROMPT_HISTORY_FILE = PACKAGE_ROOT / "logs" / "prompt_history.jsonl"
 IMAGES_OUTPUT_FOLDER = PACKAGE_ROOT / "images"
+
+class PipelineType(Enum):
+    TEXT2IMG = "text2img"
+    IMG2IMG = "img2img"
+    REFINER = "refiner"
+
+class ModelDevice(Enum):
+    CPU = "cpu"
+    GPU = "cuda"
 
 def get_directory(folder: Union[str, Path]) -> Path:
     path = PACKAGE_ROOT / folder

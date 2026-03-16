@@ -133,7 +133,7 @@ def create_ui():
 
             model_loader.initialize_compel()
             print("compel_init_ok")
-            images = model_loader.generate_images(config=config)
+            images, latent = model_loader.generate_images(config=config)
             print("image_generation_ok")
 
             write_prompt_history(config, PROMPT_HISTORY_FILE)
