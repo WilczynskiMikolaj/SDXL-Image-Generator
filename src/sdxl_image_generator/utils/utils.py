@@ -1,22 +1,31 @@
 from pathlib import Path
-from typing import Union, List
+from typing import Union, List, Optional
 import tkinter as tk
 from tkinter import filedialog
 import json
 import re
 import datetime
 from enum import Enum
-
+from dataclasses import dataclass
 
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SELECT_FOLDER_ICON_PATH = PACKAGE_ROOT / "assets" / "file_explorer_icon.png"
 PROMPT_HISTORY_FILE = PACKAGE_ROOT / "logs" / "prompt_history.jsonl"
 IMAGES_OUTPUT_FOLDER = PACKAGE_ROOT / "images"
 
+class ModelType(Enum):
+    SDXL = "sdxl"
+
 class PipelineType(Enum):
     TEXT2IMG = "text2img"
     IMG2IMG = "img2img"
     REFINER = "refiner"
+    UPSCALER = "upscaler"
+
+@dataclass(frozen=True)
+class PipelineKey:
+    pipeline_type: PipelineType
+    model: str
 
 class ModelDevice(Enum):
     CPU = "cpu"
@@ -25,6 +34,27 @@ class ModelDevice(Enum):
 def get_directory(folder: Union[str, Path]) -> Path:
     path = PACKAGE_ROOT / folder
     return path
+
+@dataclass
+class GenerationConfig:
+    positive_prompt: str
+    negative_prompt: str = ""
+
+    inference_steps: int = 30
+    guidance_scale: float = 7.5
+    guidance_rescale: float = 0.0
+
+    image_width: int = 1024
+    image_height: int = 1024
+    images_per_prompt: int = 1
+
+    seed: Optional[int] = None
+
+@dataclass(frozen=True)
+class LoraKey:
+    file_path: str
+    adapter_weight: float
+
 
 def get_all_directory_elements(folder_name: Union[str, Path], project_directory: bool) -> List[str]:
     if project_directory:

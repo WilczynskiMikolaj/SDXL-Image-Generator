@@ -1,7 +1,7 @@
 import gradio as gr
 from sdxl_image_generator.utils.utils import get_all_directory_elements, choose_folder, get_directory, read_history_from_jsonl, write_prompt_history, apply_config, save_all_images
 from sdxl_image_generator.utils.utils import SELECT_FOLDER_ICON_PATH, PROMPT_HISTORY_FILE, IMAGES_OUTPUT_FOLDER
-from sdxl_image_generator.sdxl_model_pipeline.model_loader_for_ui import ModelLoaderUI
+from sdxl_image_generator.pipelines.model_loader_for_ui import UIPipelineManager
 from sdxl_image_generator.ui.components import random_seed_btn
 import random
 
@@ -13,7 +13,7 @@ def create_ui():
     available_models = ["Default (stable-diffusion-xl-base-1.0)", *model_checkpoint_names]
     available_loras = [*lora_names]
 
-    model_loader = ModelLoaderUI(available_models, lora_names)
+    model_loader = UIPipelineManager(available_models, lora_names)
     initial_prompt_history = read_history_from_jsonl(PROMPT_HISTORY_FILE) or []
     last_prompt_id = initial_prompt_history[-1]["prompt_id"]
     

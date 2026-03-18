@@ -1,6 +1,6 @@
 import argparse
-from sdxl_image_generator.sdxl_model_pipeline.model_configs import model_descriptions
-from sdxl_image_generator.sdxl_model_pipeline.model_loader_cli import ModelLoaderBase
+from sdxl_image_generator.pipelines.model_configs import model_descriptions
+from sdxl_image_generator.pipelines.model_loader_cli import ModelLoaderBase
 from sdxl_image_generator.ui.gradio_app import create_ui
 
 def main():

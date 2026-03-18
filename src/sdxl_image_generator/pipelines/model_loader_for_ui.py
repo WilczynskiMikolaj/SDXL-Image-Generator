@@ -1,7 +1,8 @@
-from sdxl_image_generator.sdxl_model_pipeline.model_loader_base import ModelLoaderBase
+from sdxl_image_generator.pipelines.pipeline_manager import PipelineManager
 import torch
 
-class ModelLoaderUI(ModelLoaderBase):
+# Deprecated
+class UIPipelineManager(PipelineManager):
     def generate_images(self, config, use_refiner=False):
         if not self.pipe or not self.compel:
             raise RuntimeError("Model or Compel not initialized")

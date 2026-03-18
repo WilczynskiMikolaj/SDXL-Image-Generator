@@ -1,10 +1,10 @@
 from diffusers import StableDiffusionXLPipeline
 import torch
 from compel import CompelForSDXL
-from sdxl_image_generator.sdxl_model_pipeline.model_configs import model_files, lora_files
+from sdxl_image_generator.pipelines.model_configs import model_files, lora_files
 import json
 from sdxl_image_generator.utils.config_loader import load_from_json
-from sdxl_image_generator.sdxl_model_pipeline.model_loader_base import ModelLoaderBase
+from sdxl_image_generator.pipelines.pipeline_manager import ModelLoaderBase
 
 
 class ModelLoaderCLI(ModelLoaderBase):
