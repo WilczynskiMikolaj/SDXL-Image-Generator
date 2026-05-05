@@ -1,94 +1,121 @@
-from diffusers import StableDiffusionXLPipeline, StableDiffusionXLImg2ImgPipeline
-import torch
-from compel import CompelForSDXL
-from typing import Union
-from abc import ABC, abstractmethod
 from pathlib import Path
-from diffusers import (
-DPMSolverMultistepScheduler,
-EulerAncestralDiscreteScheduler,
-EulerDiscreteScheduler,
-DDIMScheduler,
-HeunDiscreteScheduler,
-)
-from sdxl_image_generator.utils.utils import PACKAGE_ROOT, PipelineType, ModelDevice, PipelineKey
-from collections import OrderedDict
-from sdxl_image_generator.pipelines.model_pipeline_base import BasePipeline
+from typing import Optional
+from sdxl_image_generator.utils.utils import LoraKey, ModelDevice, default_schedulers, PipelineRequest
+from sdxl_image_generator.pipelines.pipeline_cache import PipelineCache
+from sdxl_image_generator.pipelines.pipeline_factory import PipelineFactory
 
-class PipelineManager(ABC):
-    def __init__(self, available_models=None, available_loras=None, schedulers=None, max_pipelines_on_gpu=1, max_pipelines_on_cpu=1):
-        self.active_pipelines = []
+class PipelineManager:
+    def __init__(
+        self,
+        available_models: Optional[dict[str, Path]] = None,
+        available_loras: Optional[dict[str, LoraKey]] = None,
+        schedulers=None,
+        max_pipelines_on_gpu=1,
+        max_pipelines_on_cpu=1
+    ):
+        self.available_models: dict[str, Path] = available_models or {
+            "default_sdxl": Path("stable-diffusion-xl-base-1.0")
+        }
 
-        self.available_models: list = available_models or ["Default (stable-diffusion-xl-base-1.0)"]
-        self.available_loras: list = available_loras or []
-        self.available_schedulers: dict = schedulers or {
-            "dpmpp_2m": DPMSolverMultistepScheduler,
-            "euler_a": EulerAncestralDiscreteScheduler,
-            "euler": EulerDiscreteScheduler,
-            "ddim": DDIMScheduler,
-            "heun": HeunDiscreteScheduler}
-        
-        self.models_directory: Path = PACKAGE_ROOT / "model_checkpoints"
-        self.refiners_directory: Path = PACKAGE_ROOT / "refiners"
-        self.loras_directory: Path = PACKAGE_ROOT / "loras"
+        self.available_loras: dict[str, LoraKey] = available_loras or {}
 
-        self.gpu_cache: OrderedDict[PipelineKey, BasePipeline] = OrderedDict()
-        self.cpu_cache: OrderedDict[PipelineKey, BasePipeline] = OrderedDict()
+        self.available_schedulers: dict = schedulers or default_schedulers
 
-        self.max_gpu_slots: int = max_pipelines_on_gpu
-        self.max_cpu_slots: int = max_pipelines_on_cpu
+        self.cache = PipelineCache(max_pipelines_on_gpu, max_pipelines_on_cpu)
+        self.temp_img = []
 
+    def run_pipeline(self, request: PipelineRequest):
+        model_path = self._resolve_model_path(request.key.model_name)
 
-    def load_loras(self, loras, adapter_weights=None):
-        pass
+        if hasattr(request.config, "model_checkpoint"):
+            request.config.model_checkpoint = str(model_path)
 
-    def _initialize_pipeline(self, model_name:str, use_gpu:bool=True):
-        pass
-    
-    def load_model(self, model_name):
-        pass
-    
-    def load_model_selection(self, available_models: list, models_directory: Union[str, Path]) -> None:
-        pass
-    
-    def load_loras_selection(self, available_loras: list, loras_directory: Union[str, Path]) -> None:
-        pass
+        self._validate_loras(request.config)
+        self._validate_scheduler(request.config)
 
-    def change_scheduler(self, name: str):
-        pass
-        
-    def clear_cache(self):
-        pass
+        pipeline, pipeline_device = self.cache.get(request.key)
 
-    def load_refiner(self, refiner_model):
-        pass
+        if pipeline is None:
+            self.cache.ensure_free_space(request.device)
+            pipeline = PipelineFactory.create(
+                request.key.model_type,
+                request.key.pipeline_type,
+                model_config=request.config,
+                init_device=request.device
+            )
+            self.cache.add(request.key, pipeline, request.device)
+            
+        elif pipeline_device == "cpu" and request.device == ModelDevice.GPU:
+            pipeline = self.cache.ensure_on_gpu(request.key, pipeline)
+            
+        elif pipeline_device == "gpu" and request.device == ModelDevice.GPU:
+             self.cache.gpu_cache.move_to_end(request.key)
 
-    def _initialize_refiner(self, refiner_model, load_on_gpu=True):
-        pass
+        images, latent = pipeline.run_pipeline(
+            request.generation_config,
+            request.config 
+        )
 
-    def _safe_load(self, pipe_type: PipelineType, device: ModelDevice):
-        pass
+        self.temp_img = latent
+        return images
 
-    def _load_on_gpu(self, pipe_type: PipelineType):
-        pass
+    def _resolve_model_path(self, model_name: Optional[str]) -> Path | str:
+            self._validate_model_name(model_name)
 
-    def _load_on_cpu(self, pipe_type: PipelineType):
-        pass
-    
-    def load_upscaler(self):
-        pass
+            path = self.available_models[model_name]
 
-    def _initialize_upscaler(self):
-        pass
-    
-    @abstractmethod
-    def generate_images(self):
-        pass
+            if isinstance(path, str) and "/" in path:
+                return path
 
-    @abstractmethod
-    def img2img(self):
-        pass
+            if not Path(path).exists():
+                raise FileNotFoundError(
+                    f"Checkpoint path does not exist: {path}"
+                )
 
-    @abstractmethod
-    def refine_image(self):
-        pass
+            return path
+
+    def _validate_model_name(self, model_name: Optional[str]):
+        if model_name is None:
+            raise ValueError("Model name must be provided")
+
+        if model_name not in self.available_models:
+            raise ValueError(
+                f"Model '{model_name}' not found. "
+                f"Available: {list(self.available_models.keys())}"
+            )
+
+    def _validate_loras(self, config):
+        if not hasattr(config, "init_loras") or config.init_loras is None:
+            return
+
+        for name, lora in config.init_loras.items():
+            if name not in self.available_loras:
+                raise ValueError(
+                    f"Lora '{name}' not registered. "
+                    f"Available: {list(self.available_loras.keys())}"
+                )
+
+            if not Path(lora.file_path).exists():
+                raise FileNotFoundError(
+                    f"Lora file not found: {lora.file_path}"
+                )
+
+    def _validate_scheduler(self, config):
+        if not hasattr(config, "scheduler") or config.scheduler is None:
+            return
+
+        if isinstance(config.scheduler, str):
+            if config.scheduler not in self.available_schedulers:
+                raise ValueError(
+                    f"Scheduler '{config.scheduler}' not available. "
+                    f"Available: {list(self.available_schedulers.keys())}")
+            config.scheduler = self.available_schedulers[config.scheduler]
+
+    def set_available_models(self, models: dict[str, Path]):
+        self.available_models = models
+
+    def set_available_loras(self, loras: dict[str, LoraKey]):
+        self.available_loras = loras
+
+    def validate_model(self, model_name: str) -> bool:
+        return model_name in self.available_models

@@ -1,12 +1,12 @@
-from diffusers import StableDiffusionXLPipeline
+"""from diffusers import StableDiffusionXLPipeline
 import torch
 from compel import CompelForSDXL
 from sdxl_image_generator.pipelines.model_configs import model_files, lora_files
 import json
 from sdxl_image_generator.utils.config_loader import load_from_json
-from sdxl_image_generator.pipelines.pipeline_manager import ModelLoaderBase
-
-
+"""
+# Depracated
+"""
 class ModelLoaderCLI(ModelLoaderBase):
     def __init__(self, image_size=(1024, 1024), guidance_scale=4.123817, inference_steps=40, images_per_prompt=5, seed=None, guidance_rescale=0.0, adapter_weights=None,):
         super().__init__()
@@ -226,3 +226,4 @@ class ModelLoaderTEMP:
         
         for i in range(self.images_per_prompt):
             generated_images.images[i].save(f"images/{counter + i}image.png")
+"""

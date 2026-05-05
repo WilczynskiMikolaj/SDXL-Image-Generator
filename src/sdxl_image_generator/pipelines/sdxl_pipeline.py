@@ -1,46 +1,70 @@
 import torch
-from sdxl_image_generator.pipelines.sdxl_general_pipeline import SDXLImgGenPipelines
-from sdxl_image_generator.utils.utils import ModelDevice, ModelType, PipelineType
+from sdxl_image_generator.pipelines.sdxl_general_pipeline import SDXLConfig, SDXLImgGenPipelines
+from sdxl_image_generator.utils.utils import ModelDevice, ModelType, PipelineType, GenerationConfig
 from diffusers import StableDiffusionXLPipeline
+from sdxl_image_generator.pipelines.pipeline_factory import PipelineFactory
 
+@PipelineFactory.register(ModelType.SDXL, PipelineType.TEXT2IMG)
 class SDXLTxt2ImgPipeline(SDXLImgGenPipelines):
-    def __init__(self, model_type: ModelType, pipeline_type:PipelineType, init_device: ModelDevice, alias:str, scheduler, model_checkpoint:str, init_loras:dict):
-        super().__init__(self, model_type, pipeline_type, init_device, alias, scheduler, model_checkpoint, init_loras)
+    def __init__(self, model_type: ModelType, pipeline_type:PipelineType, init_device: ModelDevice,  model_config: SDXLConfig):
+        super().__init__(model_type, pipeline_type, init_device, model_config)
         self.initialize_pipeline()
     
     def initialize_pipeline(self):
-        if self.pipe:
-            self.destroy_pipeline()
+            if self.pipe:
+                self.destroy_pipeline()
 
-        dtype = torch.float16 if self.device == ModelDevice.GPU else torch.float32
-        self.pipe = StableDiffusionXLPipeline.from_pretrained(self.model_checkpoint, torch_dtype=dtype, use_safetensors=True)
+            dtype = torch.float16 if self.device == ModelDevice.GPU else torch.float32
+            
+            checkpoint_path = str(self.model_checkpoint)
 
-        if self.scheduler:
-            self.pipe.scheduler = self.scheduler
+            if checkpoint_path.endswith(".safetensors") or checkpoint_path.endswith(".ckpt"):
+                self.pipe = StableDiffusionXLPipeline.from_single_file(
+                    checkpoint_path, 
+                    torch_dtype=dtype, 
+                    use_safetensors=True
+                )
+            else:
+                self.pipe = StableDiffusionXLPipeline.from_pretrained(
+                    checkpoint_path, 
+                    torch_dtype=dtype, 
+                    use_safetensors=True
+                )
 
-        if self.device == ModelDevice.GPU:
-            self.load_on_gpu()
+            self.pipe.vae.to(dtype=torch.float32)
 
-        self.pipe.vae.enable_slicing()
-        self.pipe.vae.enable_tiling()
-        try:
-            self.pipe.enable_xformers_memory_efficient_attention()
-        except Exception:
-            pass
+            if self.scheduler:
+                self.pipe.scheduler = self.scheduler.from_config(self.pipe.scheduler.config)
 
-        self.initialize_loras()
-        self.initialize_compel()
+            if self.device == ModelDevice.GPU:
+                self.load_on_gpu()
+
+            self.pipe.vae.enable_slicing()
+            self.pipe.vae.enable_tiling()
+            
+            try:
+                self.pipe.enable_xformers_memory_efficient_attention()
+            except Exception:
+                pass
+
+            self.initialize_loras()
+            self.initialize_compel()
     
-    def generate_images(self, config):
+    def run_pipeline(self, gen_config:GenerationConfig, pipeline_config: SDXLConfig):
+        self.update_scheduler(pipeline_config.scheduler)
+        self.update_lora(pipeline_config.init_loras)
+        return self.generate_images(gen_config)
+
+    def generate_images(self, config:GenerationConfig):
         if not self.pipe or not self.compel:
             raise RuntimeError("Model or Compel not initialized")
         
-        if config["seed"] is None or config["seed"] < 0:
+        if config.seed is None or config.seed < 0:
             seed = torch.randint(0, 2**32 - 1, (1,)).item()
         else:
-            seed = config["seed"]
+            seed = config.seed
 
-        conditioning = self.compel(config["positive_prompt"], negative_prompt=config["negative_prompt"])
+        conditioning = self.compel(config.positive_prompt, negative_prompt=config.negative_prompt)
         device = "cuda" if self.device == ModelDevice.GPU else "cpu"
         generator = torch.Generator(device).manual_seed(seed)
 
@@ -49,9 +73,9 @@ class SDXLTxt2ImgPipeline(SDXLImgGenPipelines):
                 pooled_prompt_embeds=conditioning.pooled_embeds,
                 negative_prompt_embeds=conditioning.negative_embeds,
                 negative_pooled_prompt_embeds=conditioning.negative_pooled_embeds,
-                num_inference_steps=config["inference_steps"], guidance_scale=config["guidance_scale"], 
-                width=config["image_width"], height=config["image_height"], num_images_per_prompt=config["images_per_prompt"], 
-                generator=generator, guidance_rescale=config["guidance_rescale"], output_type="latent")
+                num_inference_steps=config.inference_steps, guidance_scale=config.guidance_scale, 
+                width=config.image_width, height=config.image_height, num_images_per_prompt=config.images_per_prompt, 
+                generator=generator, guidance_rescale=config.guidance_rescale, output_type="latent")
             
         latents = generated_images.images
         preview_images = self.decode_latents(latents)
@@ -63,6 +87,4 @@ class SDXLTxt2ImgPipeline(SDXLImgGenPipelines):
 
 
 class SDXLImg2ImgPipeline(SDXLImgGenPipelines):
-    def __init__(self, model_type, pipeline_type, init_device, alias):
-        super().__init__(model_type, pipeline_type, init_device, alias)
-        self.compel = None
+    pass

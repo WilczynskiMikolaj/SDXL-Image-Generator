@@ -1,23 +1,27 @@
-from sdxl_image_generator.utils.utils import PipelineType, ModelDevice, ModelType
+import torch
+from sdxl_image_generator.utils.utils import BasePipelineConfig, GenerationConfig, PipelineType, ModelDevice, ModelType
 from abc import ABC, abstractmethod
 
 class BasePipeline(ABC):
-    def __init__(self, model_type: ModelType, pipeline_type:PipelineType, init_device: ModelDevice, alias:str):
+    def __init__(self, model_type: ModelType, pipeline_type:PipelineType, init_device: ModelDevice, model_config:BasePipelineConfig):
         self.model_type:ModelType = model_type
         self.pipeline_type:PipelineType = pipeline_type
         self.device:ModelDevice = init_device
-        self.alias:str = alias
+        self.model_config = model_config
 
         self.pipe = None
 
-    def switch_device(self, device:ModelDevice):
-        match device:
-            case ModelDevice.CPU:
-                self.pipe.to("cpu")
-                self.device = ModelDevice.CPU
-            case ModelDevice.GPU:
-                self.pipe.to("cuda")
-                self.device = ModelDevice.GPU
+    @abstractmethod
+    def switch_device(self, device: ModelDevice):
+        pass
+
+    @abstractmethod
+    def load_on_gpu(self):
+        pass
+
+    @abstractmethod
+    def load_on_cpu(self):
+        pass
 
     @abstractmethod
     def initialize_pipeline(self):
@@ -25,4 +29,8 @@ class BasePipeline(ABC):
 
     @abstractmethod
     def destroy_pipeline(self):
+        pass
+
+    @abstractmethod
+    def run_pipeline(self, gen_config: GenerationConfig, pipeline_config: BasePipelineConfig):
         pass

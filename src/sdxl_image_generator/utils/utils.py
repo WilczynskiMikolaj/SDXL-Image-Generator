@@ -7,6 +7,14 @@ import re
 import datetime
 from enum import Enum
 from dataclasses import dataclass
+from diffusers import (
+DPMSolverMultistepScheduler,
+EulerAncestralDiscreteScheduler,
+EulerDiscreteScheduler,
+DDIMScheduler,
+HeunDiscreteScheduler,
+)
+from diffusers import SchedulerMixin
 
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 SELECT_FOLDER_ICON_PATH = PACKAGE_ROOT / "assets" / "file_explorer_icon.png"
@@ -15,6 +23,7 @@ IMAGES_OUTPUT_FOLDER = PACKAGE_ROOT / "images"
 
 class ModelType(Enum):
     SDXL = "sdxl"
+    UPSCALER = "upscaler"
 
 class PipelineType(Enum):
     TEXT2IMG = "text2img"
@@ -24,8 +33,9 @@ class PipelineType(Enum):
 
 @dataclass(frozen=True)
 class PipelineKey:
+    model_type: ModelType
     pipeline_type: PipelineType
-    model: str
+    model_name: Optional[str]
 
 class ModelDevice(Enum):
     CPU = "cpu"
@@ -34,6 +44,15 @@ class ModelDevice(Enum):
 def get_directory(folder: Union[str, Path]) -> Path:
     path = PACKAGE_ROOT / folder
     return path
+
+@dataclass(frozen=True)
+class LoraKey:
+    file_path: str
+    adapter_weight: float
+
+@dataclass
+class BasePipelineConfig:
+    pass
 
 @dataclass
 class GenerationConfig:
@@ -50,19 +69,28 @@ class GenerationConfig:
 
     seed: Optional[int] = None
 
-@dataclass(frozen=True)
-class LoraKey:
-    file_path: str
-    adapter_weight: float
+@dataclass
+class PipelineRequest:
+    key: PipelineKey
+    config: BasePipelineConfig
+    device: ModelDevice
+    generation_config: GenerationConfig
+
+default_schedulers =  {
+            "dpmpp_2m": DPMSolverMultistepScheduler,
+            "euler_a": EulerAncestralDiscreteScheduler,
+            "euler": EulerDiscreteScheduler,
+            "ddim": DDIMScheduler,
+            "heun": HeunDiscreteScheduler}
 
 
-def get_all_directory_elements(folder_name: Union[str, Path], project_directory: bool) -> List[str]:
+def get_all_directory_elements(folder_name: Union[str, Path], project_directory: bool) -> dict[str, Path]:
     if project_directory:
         directory = get_directory(folder_name)
-        return sorted(p.name for p in directory.iterdir() if p.is_file() and p.suffix == ".safetensors")
     else:
-        folder_name = Path(folder_name)
-        return sorted(p.name for p in folder_name.iterdir() if p.is_file() and p.suffix == ".safetensors")
+        directory = Path(folder_name)
+    
+    return {p.name: p for p in directory.iterdir() if p.is_file() and p.suffix == ".safetensors"}
     
 
 def choose_folder():
