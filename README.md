@@ -21,7 +21,7 @@ When working with heavy AI models, you often want to test different checkpoints 
 
 To solve this, this library implements an active cache:
 * **Smart Eviction:** The `PipelineManager` actively manages how many models sit on your GPU (VRAM) and CPU (System RAM) based on configurable integer limits. 
-* **Seamless Swapping:** If the GPU is full, older models aren't destroyed-they are smoothly evicted to system RAM. When you need them again, they swap back into VRAM instantly, drastically reducing load times.
+* **Seamless Swapping:** If the GPU is full, older models aren't destroyed they are smoothly evicted to system RAM. When you need them again, they swap back into VRAM instantly, reducing load times.
 * **Future Feature:** The manager will soon automatically detect your system's total VRAM and RAM to dynamically optimize these cache limits for your specific hardware.
 
 ---
